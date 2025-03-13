@@ -1,4 +1,4 @@
-module gmf
+module github.com/wyy8261/gmf
 
 go 1.23.0
 
