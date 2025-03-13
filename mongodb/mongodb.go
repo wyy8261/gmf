@@ -8,6 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"net/url"
 	"time"
 )
 
@@ -16,7 +17,7 @@ var (
 )
 
 func Init(dbhost, authdb, authuser, authpass string) {
-	url := fmt.Sprintf("mongodb://%s:%s@%s/%s", authuser, authpass, dbhost, authdb)
+	url := fmt.Sprintf("mongodb://%s:%s@%s/%s", authuser, url.QueryEscape(authpass), dbhost, authdb)
 	logger.LOGD("url:", url)
 	gClientOptions = options.Client().ApplyURI(url)
 }
