@@ -11,7 +11,8 @@ import (
 )
 
 var (
-	Conf *Config
+	gConf  *Config
+	gExtra interface{}
 )
 
 type ServerInfo struct {
@@ -56,10 +57,33 @@ func (c *Config) Addr() string {
 }
 
 func Default() *Config {
-	if Conf != nil {
-		return Conf
+	if gConf != nil {
+		return gConf
 	}
 	return &Config{}
+}
+
+func Extra[T any]() *T {
+	if gExtra != nil {
+		v, ok := gExtra.(*T)
+		if ok {
+			return v
+		}
+	}
+	var cpath string = "conf/config.toml"
+	if !IsExist(cpath) {
+		_, filename, _, ok := runtime.Caller(0)
+		if ok {
+			cpath = path.Join(path.Dir(filename), "config.toml")
+		}
+	}
+	conf := new(T)
+	if _, err := toml.DecodeFile(cpath, conf); err != nil {
+		logger.LOGE("err:", err)
+		return nil
+	}
+	gExtra = conf
+	return conf
 }
 
 func IsExist(f string) bool {
@@ -81,7 +105,7 @@ func init() {
 	os.Chdir(execPath)
 	logger.LOGD("Chdir:", execPath)
 
-	Conf = Default()
+	gConf = Default()
 	var cpath string = "conf/config.toml"
 	if !IsExist(cpath) {
 		_, filename, _, ok := runtime.Caller(0)
@@ -90,7 +114,7 @@ func init() {
 		}
 	}
 
-	if _, err := toml.DecodeFile(cpath, &Conf); err != nil {
+	if _, err := toml.DecodeFile(cpath, &gConf); err != nil {
 		logger.LOGE("err:", err)
 		return
 	}
