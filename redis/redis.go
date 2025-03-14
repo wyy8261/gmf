@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gomodule/redigo/redis"
-	"gmf/conf"
+	"github.com/wyy8261/gmf/conf"
 	"time"
 )
 

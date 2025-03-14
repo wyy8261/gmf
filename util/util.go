@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dlclark/regexp2"
-	"gmf/logger"
+	"github.com/wyy8261/gmf/logger"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -18,6 +18,19 @@ import (
 	"strconv"
 	"time"
 )
+
+func SetTimer(dura time.Duration, proc func()) {
+	proc()
+	go func(d time.Duration, f func()) {
+		ticker := time.NewTicker(d)
+		for {
+			select {
+			case <-ticker.C:
+				go f()
+			}
+		}
+	}(dura, proc)
+}
 
 func Base642File(base64Str string) (io.Reader, error) {
 	re, err := regexp2.Compile("data:image/([a-zA-Z]|[0-9])*;base64,", 0)

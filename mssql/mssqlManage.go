@@ -1,8 +1,8 @@
 package mssql
 
 import (
-	"gmf/conf"
-	"gmf/logger"
+	"github.com/wyy8261/gmf/conf"
+	"github.com/wyy8261/gmf/logger"
 	"strconv"
 )
 

@@ -3,7 +3,7 @@ package conf
 import (
 	"fmt"
 	"github.com/BurntSushi/toml"
-	"gmf/logger"
+	"github.com/wyy8261/gmf/logger"
 	"os"
 	"path"
 	"path/filepath"

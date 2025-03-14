@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
-	"gmf/logger"
-	"gmf/redis"
-	"gmf/util"
+	"github.com/wyy8261/gmf/logger"
+	"github.com/wyy8261/gmf/redis"
+	"github.com/wyy8261/gmf/util"
 	"net/http"
 	"path"
 	"strings"
@@ -212,19 +212,6 @@ func ClearExpireMemoryCache() {
 	for _, item := range delKeys {
 		gUserDataCache.Delete(item)
 	}
-}
-
-func SetTimer(dura time.Duration, proc func()) {
-	proc()
-	go func(d time.Duration, f func()) {
-		ticker := time.NewTicker(d)
-		for {
-			select {
-			case <-ticker.C:
-				go f()
-			}
-		}
-	}(dura, proc)
 }
 
 func (c *MyContext) SetHttpCache(duration time.Duration) {

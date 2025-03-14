@@ -1,7 +1,7 @@
 package mongodb
 
 import (
-	"gmf/conf"
+	"github.com/wyy8261/gmf/conf"
 )
 
 func init() {
