@@ -38,6 +38,15 @@ func (s *ServerInfo) Addr() string {
 	return fmt.Sprintf("%s:%d", s.IP, s.Port)
 }
 
+type AlyConf struct {
+	Endpoint        string `toml:"endpoint"`
+	AccessKeyId     string `toml:"accessKeyId"`
+	AccessKeySecret string `toml:"accessKeySecret"`
+	BucketName      string `toml:"bucketName"`
+	ImgScan         bool   `toml:"imgScan"`
+	ScanRegionId    string `toml:"scanRegionId"`
+}
+
 type Config struct {
 	IP       string
 	Port     int
@@ -50,6 +59,7 @@ type Config struct {
 	RabbitMQ ServerInfo
 	Mongo    ServerInfo
 	TLS      TLSInfo
+	Aly      AlyConf
 }
 
 func (c *Config) Addr() string {

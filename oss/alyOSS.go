@@ -3,15 +3,14 @@ package oss
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/BurntSushi/toml"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/green"
 	aly "github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"github.com/wyy8261/gmf/conf"
 	logger "github.com/wyy8261/go-simplelog"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -26,17 +25,7 @@ var (
 
 type AlyOss struct {
 	client      *aly.Client
-	conf        *AlyConf
 	greenClient *green.Client
-}
-
-type AlyConf struct {
-	Endpoint        string `toml:"endpoint"`
-	AccessKeyId     string `toml:"accessKeyId"`
-	AccessKeySecret string `toml:"accessKeySecret"`
-	BucketName      string `toml:"bucketName"`
-	ImgScan         bool   `toml:"imgScan"`
-	ScanRegionId    string `toml:"scanRegionId"`
 }
 
 type TgImageSyncScanRes struct {
@@ -52,29 +41,12 @@ type TgImageSyncScanRes struct {
 	} `json:"data"`
 }
 
-func loadConfig(path string) *AlyConf {
-	conf := AlyConf{
-		Endpoint:        endpoint,
-		AccessKeyId:     accessKeyId,
-		AccessKeySecret: accessKeySecret,
-		BucketName:      bucketName,
-	}
-	_, err := os.Stat(path)
-	if err == nil || os.IsExist(err) {
-		if _, err = toml.DecodeFile(path, &conf); err != nil {
-			logger.LOGE("err:", err)
-		}
-	}
-	return &conf
-}
-
 func createAlyClient() (*aly.Client, error) {
-	conf := loadConfig("conf/credentials")
-	client, err := aly.New(conf.Endpoint, conf.AccessKeyId, conf.AccessKeySecret, aly.Timeout(7, 120))
+	client, err := aly.New(conf.Default().Aly.Endpoint, conf.Default().Aly.AccessKeyId, conf.Default().Aly.AccessKeySecret, aly.Timeout(7, 120))
 	if err != nil {
 		return nil, err
 	}
-	bucketName = conf.BucketName
+	bucketName = conf.Default().Aly.BucketName
 	// 判断存储空间是否存在。
 	isExist, err := client.IsBucketExist(bucketName)
 	if err != nil {
@@ -202,23 +174,27 @@ func (o *AlyOss) SaveFile(path string, f io.Reader) bool {
 }
 
 func (o *AlyOss) ViolationImage(path string) bool {
+	if !conf.Default().Aly.ImgScan {
+		return false
+	}
+
 	if o.greenClient == nil {
 		logger.LOGE("err:greenClient == nil,path:", path)
 		return false
 	}
 
-	url := fmt.Sprintf("https://%s.%s/%s", o.conf.BucketName, o.conf.Endpoint, path)
+	url := fmt.Sprintf("https://%s.%s/%s", conf.Default().Aly.BucketName, conf.Default().Aly.Endpoint, path)
 	//阿里云oss内网地址替换为外网地址
 	if strings.Contains(url, "-internal.") {
 		url = strings.Replace(url, "-internal.", ".", 1)
 	}
 
-	task1 := map[string]interface{}{"dataId": fmt.Sprintf("%d", time.Now().UnixNano()), "url": url}
+	task1 := map[string]interface{}{"dataId": fmt.Sprintf("%d", time.Now().UnixNano()), "url": url, "interval": 2, "maxFrames": 10}
 	// scenes：检测场景，支持指定多个场景。
 	content, _ := json.Marshal(
 		map[string]interface{}{
-			"tasks": [...]map[string]interface{}{task1}, "scenes": [...]string{"porn"},
-			"bizType": "业务场景",
+			"tasks": [...]map[string]interface{}{task1}, "scenes": [...]string{"porn", "ad", "live"},
+			"bizType": "default",
 		},
 	)
 
