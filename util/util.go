@@ -250,3 +250,14 @@ func Today() time.Time {
 	d := time.Now()
 	return time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location())
 }
+
+func Slice2Interface[T any](s []T) []interface{} {
+	if s == nil {
+		return nil
+	}
+	result := make([]interface{}, len(s))
+	for i, v := range s {
+		result[i] = v
+	}
+	return result
+}
