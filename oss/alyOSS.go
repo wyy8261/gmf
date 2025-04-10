@@ -62,13 +62,30 @@ func createAlyClient() (*aly.Client, error) {
 	return client, nil
 }
 
+func createGreenClient() (*green.Client, error) {
+	client, err := green.NewClientWithAccessKey(conf.Default().Aly.ScanRegionId, conf.Default().Aly.AccessKeyId, conf.Default().Aly.AccessKeySecret)
+	if err != nil {
+		logger.LOGE("err:", err)
+		return nil, err
+	}
+	return client, nil
+}
+
 func NewAlyOss() *AlyOss {
 	client, err := createAlyClient()
 	if err != nil {
 		logger.LOGE("err:", err)
 		return nil
 	}
-	oss := &AlyOss{client: client}
+	var greenClient *green.Client = nil
+	if conf.Default().Aly.ImgScan {
+		greenClient, err = createGreenClient()
+		if err != nil {
+			logger.LOGE("err:", err)
+			return nil
+		}
+	}
+	oss := &AlyOss{client: client, greenClient: greenClient}
 	return oss
 }
 
@@ -189,12 +206,17 @@ func (o *AlyOss) ViolationImage(path string) bool {
 		url = strings.Replace(url, "-internal.", ".", 1)
 	}
 
+	bizType := "default"
+	if strings.Contains(url, "/original/") {
+		bizType = "recomend"
+	}
+
 	task1 := map[string]interface{}{"dataId": fmt.Sprintf("%d", time.Now().UnixNano()), "url": url, "interval": 2, "maxFrames": 10}
 	// scenes：检测场景，支持指定多个场景。
 	content, _ := json.Marshal(
 		map[string]interface{}{
-			"tasks": [...]map[string]interface{}{task1}, "scenes": [...]string{"porn", "ad", "live"},
-			"bizType": "default",
+			"tasks": [...]map[string]interface{}{task1}, "scenes": [...]string{"porn", "ad"},
+			"bizType": bizType,
 		},
 	)
 
