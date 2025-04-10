@@ -491,6 +491,7 @@ func UserVerify(useridx int64, token string) bool {
 }
 
 func defaultAuthentication(useridx *int64, auth string) bool {
+	logger.LOGD("auth:", auth)
 	strs := strings.Split(auth, ".")
 	if len(strs) == 2 {
 		*useridx = util.Atoll(strs[0])

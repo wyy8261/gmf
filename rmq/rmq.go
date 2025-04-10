@@ -18,7 +18,7 @@ package rmq
 
 import (
 	"errors"
-	logger "github.com/wyy8261/go-simplelog"
+	"github.com/wyy8261/gmf/logger"
 	"log"
 	"sync"
 	"time"

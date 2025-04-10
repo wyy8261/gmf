@@ -6,7 +6,7 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/green"
 	aly "github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/wyy8261/gmf/conf"
-	logger "github.com/wyy8261/go-simplelog"
+	"github.com/wyy8261/gmf/logger"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"

@@ -9,7 +9,7 @@ import (
 	rektypes "github.com/aws/aws-sdk-go-v2/service/rekognition/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
-	logger "github.com/wyy8261/go-simplelog"
+	"github.com/wyy8261/gmf/logger"
 	_ "image/gif"
 	_ "image/png"
 	"io"
@@ -95,7 +95,7 @@ func (o *AwsOss) DeleteFile(path string) bool {
 	return true
 }
 
-//图片鉴黄
+// 图片鉴黄
 func (o *AwsOss) ViolationImage(path string) bool {
 	min := float32(75)
 	out, err := o.rekClient.DetectModerationLabels(context.TODO(), &rekognition.DetectModerationLabelsInput{

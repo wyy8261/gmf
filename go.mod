@@ -17,7 +17,6 @@ require (
 	github.com/gomodule/redigo v1.9.2
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/streadway/amqp v1.1.0
-	github.com/wyy8261/go-simplelog v0.0.0-20201113072144-064e61a6a8f7
 	go.mongodb.org/mongo-driver v1.17.3
 )
 
