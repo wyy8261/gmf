@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/wyy8261/gmf/conf"
 	"github.com/wyy8261/gmf/logger"
 	"github.com/wyy8261/gmf/redis"
 	"github.com/wyy8261/gmf/util"
+	"io"
 	"net/http"
 	"path"
 	"strings"
@@ -30,7 +32,10 @@ var (
 	gUserDataCache    *sync.Map = new(sync.Map)
 	gHttpRequestCache           = NewHttpRequestCache()
 	gUserVerifyURI              = make(map[string]int, 0)
+	gAuthentication   AuthFunc  = defaultAuthentication
 )
+
+type AuthFunc func(useridx *int64, auth string) bool
 
 type tgMemoryCache struct {
 	ExpireTime time.Time
@@ -46,6 +51,12 @@ func (w *bodyLogWriter) Write(b []byte) (int, error) {
 	//memory copy here!
 	w.bodyBuf.Write(b)
 	return w.ResponseWriter.Write(b)
+}
+
+func SetAuthFunc(callback AuthFunc) {
+	if callback != nil {
+		gAuthentication = callback
+	}
 }
 
 func InitContext() gin.HandlerFunc {
@@ -72,6 +83,7 @@ func InitContext() gin.HandlerFunc {
 		if c.Request.Method == http.MethodPost {
 			switch c.ContentType() {
 			case binding.MIMEJSON:
+				mc.bodyDecode()
 				c.ShouldBindBodyWith(&struct{}{}, binding.JSON)
 				v, ok := c.Get(gin.BodyBytesKey)
 				if ok {
@@ -122,7 +134,7 @@ func UserVerifyInterceptor() gin.HandlerFunc {
 		if ok {
 			mc := obj.(*MyContext)
 			if mc.Verify {
-				if !Authentication(&mc.UserIdx, c.GetHeader("Authorization")) {
+				if !gAuthentication(&mc.UserIdx, c.GetHeader("Authorization")) {
 					c.Abort()
 					c.JSON(200, gin.H{
 						"data": nil,
@@ -266,6 +278,39 @@ func (c *MyContext) SetMemoryCache(key string, val interface{}, timeout time.Dur
 	return true
 }
 
+func (c *MyContext) bodyDecode() {
+	if conf.Default().AesKey == "" {
+		return
+	}
+
+	var body []byte
+	if cb, ok := c.Get(gin.BodyBytesKey); ok {
+		if cbb, ok := cb.([]byte); ok {
+			body = cbb
+		}
+	}
+	if body == nil {
+		data, err := io.ReadAll(c.Request.Body)
+		if err == nil {
+			body, err = util.AesDecrypt(data, []byte(conf.Default().AesKey))
+			if err == nil {
+				buff := new(bytes.Buffer)
+				for _, by := range body {
+					if by < 0x20 {
+						break
+					}
+					buff.WriteByte(by)
+				}
+				body = buff.Bytes()
+			} else {
+				logger.LOGE("err:", err)
+				body = data
+			}
+			c.Set(gin.BodyBytesKey, body)
+		}
+	}
+}
+
 func HandleFunc(handler func(c *MyContext, res *gin.H)) func(ctx *gin.Context) {
 	return func(c *gin.Context) {
 		obj, ok := c.Get(MY_CONTEXT_NAME)
@@ -279,6 +324,32 @@ func HandleFunc(handler func(c *MyContext, res *gin.H)) func(ctx *gin.Context) {
 			c.Header("Content-Type", "application/json; charset=utf-8")
 			defer c.JSON(200, res)
 			handler(mc, res)
+		}
+	}
+}
+
+func HandleFunc4Any[T any](handler func(c *MyContext, req *T, res *gin.H)) func(ctx *gin.Context) {
+	return func(c *gin.Context) {
+		obj, ok := c.Get(MY_CONTEXT_NAME)
+		if ok {
+			var (
+				mc  = obj.(*MyContext)
+				req = new(T)
+				res = &gin.H{
+					"data": nil,
+				}
+			)
+			c.Header("Content-Type", "application/json; charset=utf-8")
+			if err := c.Bind(req); err != nil {
+				c.JSON(200, gin.H{
+					"data": nil,
+					"code": HTTP_PARAM_ERROR,
+					"msg":  "get 参数错误",
+				})
+				return
+			}
+			defer c.JSON(200, res)
+			handler(mc, req, res)
 		}
 	}
 }
@@ -357,6 +428,18 @@ func RegisterPost4Json[T any](router gin.IRoutes, relativePath string, handler f
 	router.POST(relativePath, HandleFunc4Json(handler))
 }
 
+func RegisterPost4Form[T any](router gin.IRoutes, relativePath string, handler func(c *MyContext, req *T, res *gin.H), bVerify bool) {
+	if bVerify {
+		var URI = relativePath
+		group, ok := router.(*gin.RouterGroup)
+		if ok {
+			URI = path.Join(group.BasePath(), relativePath)
+		}
+		gUserVerifyURI[URI] = 1
+	}
+	router.POST(relativePath, HandleFunc4Any(handler))
+}
+
 // HandleFunc 实现gin.Context到自定义Context的转换。
 func HandleFunc4Json[T any](handler func(c *MyContext, req *T, res *gin.H)) func(ctx *gin.Context) {
 	return func(c *gin.Context) {
@@ -407,7 +490,7 @@ func UserVerify(useridx int64, token string) bool {
 	return false
 }
 
-func Authentication(useridx *int64, auth string) bool {
+func defaultAuthentication(useridx *int64, auth string) bool {
 	strs := strings.Split(auth, ".")
 	if len(strs) == 2 {
 		*useridx = util.Atoll(strs[0])
