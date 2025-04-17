@@ -261,3 +261,12 @@ func Slice2Interface[T any](s []T) []interface{} {
 	}
 	return result
 }
+
+func NotifyMsg(code int, inf interface{}) []byte {
+	msg := struct {
+		Code int         `json:"code"`
+		Data interface{} `json:"data"`
+	}{Code: code, Data: inf}
+	body, _ := json.Marshal(msg)
+	return body
+}

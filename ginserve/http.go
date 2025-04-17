@@ -104,8 +104,8 @@ func InitContext() gin.HandlerFunc {
 func CommonLogInterceptor() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var (
-			useridx int64
 			bodyStr string
+			useridx int64
 		)
 
 		start := time.Now()
@@ -123,7 +123,11 @@ func CommonLogInterceptor() gin.HandlerFunc {
 			bodyStr = string(mc.Ext.ReqBody)
 			json.Unmarshal(mc.blw.bodyBuf.Bytes(), &res)
 			_, ok = c.Get("IsCache")
-			logger.LOGD("code:", mc.blw.Status(), " time:", end.Sub(start).String(), ",IsCache:", ok, ",useridx:", useridx, ", ", c.Request.Method, " URL:", c.Request.URL.Path, ",body:", bodyStr, ",[code=", res.StatusCode, ",msg=", res.Message, "]")
+			useridx = mc.UserIdx
+			if useridx == 0 {
+				useridx = util.Atoll(c.GetHeader("useridx"))
+			}
+			logger.LOGD("code:", mc.blw.Status(), " time:", end.Sub(start).String(), ",IsCache:", ok, ",useridx:", useridx, ",languageType:", mc.LanguageType, ", ", c.Request.Method, " URL:", c.Request.URL.Path, ",body:", bodyStr, ",[code=", res.StatusCode, ",msg=", res.Message, "]")
 		}
 	}
 }
