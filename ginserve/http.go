@@ -63,6 +63,7 @@ func InitContext() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		mc := new(MyContext)
 		mc.Context = c
+		mc.LanguageType = util.Atoi(c.GetHeader("languageType"))
 		mc.blw = &bodyLogWriter{bodyBuf: bytes.NewBufferString(""), ResponseWriter: c.Writer}
 		c.Writer = mc.blw
 		c.Set(MY_CONTEXT_NAME, mc)

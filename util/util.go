@@ -270,3 +270,11 @@ func NotifyMsg(code int, inf interface{}) []byte {
 	body, _ := json.Marshal(msg)
 	return body
 }
+
+func Struct2Json(inf interface{}) string {
+	body, err := json.Marshal(inf)
+	if err != nil {
+		return ""
+	}
+	return string(body)
+}
