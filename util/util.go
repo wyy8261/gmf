@@ -66,6 +66,9 @@ func Base642FileType(base64Str string) string {
 
 // Aes/ECB模式的加密方法，PKCS7填充方式
 func AesEncrypt(src, key []byte) ([]byte, error) {
+	if len(key) == 0 {
+		return nil, errors.New("key empty")
+	}
 	Block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -81,6 +84,9 @@ func AesEncrypt(src, key []byte) ([]byte, error) {
 
 // Aes/ECB模式的解密方法，PKCS7填充方式
 func AesDecrypt(src, key []byte) ([]byte, error) {
+	if len(key) == 0 {
+		return nil, errors.New("key empty")
+	}
 	Block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
