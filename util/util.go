@@ -64,21 +64,50 @@ func Base642FileType(base64Str string) string {
 	return ""
 }
 
+// PKCS7 填充
+func PKCS7Padding(src []byte, blockSize int) []byte {
+	padding := blockSize - len(src)%blockSize
+	padText := bytes.Repeat([]byte{byte(padding)}, padding)
+	return append(src, padText...)
+}
+
+// PKCS7 去填充
+func PKCS7UnPadding(src []byte) ([]byte, error) {
+	length := len(src)
+	if length == 0 {
+		return nil, errors.New("invalid padding")
+	}
+	padding := int(src[length-1])
+	if padding < 1 || padding > aes.BlockSize {
+		return nil, errors.New("invalid padding")
+	}
+	return src[:length-padding], nil
+}
+
 // Aes/ECB模式的加密方法，PKCS7填充方式
 func AesEncrypt(src, key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, errors.New("key empty")
 	}
-	Block, err := aes.NewCipher(key)
+	// 检查密钥长度（必须是 16/24/32 字节）
+	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
+		return nil, errors.New("invalid key length (must be 16/24/32 bytes)")
+	}
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
 	if len(src) == 0 {
 		return nil, errors.New("plaintext empty")
 	}
-	mode := NewECBEncrypter(Block)
-	ciphertext := src
-	mode.CryptBlocks(ciphertext, ciphertext)
+
+	// 添加 PKCS7 填充
+	src = PKCS7Padding(src, block.BlockSize())
+
+	// ECB 加密
+	mode := NewECBEncrypter(block)
+	ciphertext := make([]byte, len(src))
+	mode.CryptBlocks(ciphertext, src) // 注意：必须加密到新内存，不可复用 src
 	return ciphertext, nil
 }
 
