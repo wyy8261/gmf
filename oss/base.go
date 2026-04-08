@@ -10,7 +10,7 @@ type OssBase interface {
 	//移动文件
 	MoveFile(srcPath, destPath string) bool
 	//图片鉴黄
-	ViolationImage(path string) bool
+	ViolationImage(path string, filterLabel []string) bool
 }
 
 func NewOss(code string) OssBase {

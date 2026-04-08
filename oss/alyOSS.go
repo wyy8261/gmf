@@ -190,7 +190,19 @@ func (o *AlyOss) SaveFile(path string, f io.Reader) bool {
 	return true
 }
 
-func (o *AlyOss) ViolationImage(path string) bool {
+func (o *AlyOss) isFilterLabel(label string, filterLabel []string) bool {
+	if filterLabel == nil {
+		return false
+	}
+	for _, filter := range filterLabel {
+		if label == filter {
+			return true
+		}
+	}
+	return false
+}
+
+func (o *AlyOss) ViolationImage(path string, filterLabel []string) bool {
 	if !conf.Default().Aly.ImgScan {
 		return false
 	}
@@ -242,7 +254,10 @@ func (o *AlyOss) ViolationImage(path string) bool {
 			for _, item := range obj.Data {
 				if item.Code == 200 && item.Results != nil && len(item.Results) > 0 {
 					for _, ret := range item.Results {
-						if strings.Compare("review", ret.Suggestion) == 0 {
+						if o.isFilterLabel(ret.Label, filterLabel) {
+							continue
+						}
+						if strings.Compare("pass", ret.Suggestion) != 0 {
 							return true
 						}
 					}

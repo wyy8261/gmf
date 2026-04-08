@@ -96,7 +96,7 @@ func (o *AwsOss) DeleteFile(path string) bool {
 }
 
 // 图片鉴黄
-func (o *AwsOss) ViolationImage(path string) bool {
+func (o *AwsOss) ViolationImage(path string, filterLabel []string) bool {
 	min := float32(75)
 	out, err := o.rekClient.DetectModerationLabels(context.TODO(), &rekognition.DetectModerationLabelsInput{
 		Image: &rektypes.Image{
