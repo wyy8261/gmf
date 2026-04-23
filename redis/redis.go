@@ -1,282 +1,234 @@
 package redis
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/gomodule/redigo/redis"
-	"github.com/wyy8261/gmf/conf"
+	"strconv"
 	"time"
+
+	"github.com/wyy8261/gmf/logger"
+	"github.com/wyy8261/gmf/util"
+
+	rds "github.com/redis/go-redis/v9"
+	"github.com/wyy8261/gmf/conf"
 )
 
 var (
-	pool *redis.Pool = nil
+	ctx    = context.Background()
+	client *rds.Client
 )
 
-func getPool() *redis.Pool {
-	if pool == nil {
-		pool = newPool()
+func Client() *rds.Client {
+	if client != nil {
+		return client
 	}
-	return pool
-}
-func newPool() *redis.Pool {
-	return &redis.Pool{
-		MaxIdle:     3,
-		MaxActive:   10,
-		IdleTimeout: 240 * time.Second,
-		Dial: func() (redis.Conn, error) {
-			c, err := redis.Dial("tcp", conf.Default().Redis.Addr())
-			if err != nil {
-				return nil, err
-			}
 
-			sPass := conf.Default().Redis.Pwd
-			if len(sPass) > 0 {
-				if _, err := c.Do("AUTH", sPass); err != nil {
-					c.Close()
-					return nil, err
-				}
-			}
-			return c, err
-		},
-		TestOnBorrow: func(c redis.Conn, t time.Time) error {
-			if time.Since(t) < time.Minute {
-				return nil
-			}
-			_, err := c.Do("PING")
-			return err
-		},
-	}
+	cfg := conf.Default().Redis
+	client = rds.NewClient(&rds.Options{
+		Addr:     cfg.Addr(),
+		Password: cfg.Pwd,
+		DB:       util.Atoi(cfg.DBName),
+		PoolSize: 100,
+	})
+	logger.LOGD("addr:", cfg.Addr())
+	return client
 }
 
-func parseReply(reply interface{}, err error, data interface{}) error {
-	var (
-		iTmp int     = 0
-		fTmp float64 = 0
-		uTmp uint64  = 0
-	)
-	switch data.(type) {
+/* -------------------- 工具函数 -------------------- */
+
+func normalizeValue(v interface{}) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case []byte:
+		return string(t)
+	case int, int8, int16, int32, int64:
+		return fmt.Sprintf("%d", t)
+	case uint, uint8, uint16, uint32, uint64:
+		return fmt.Sprintf("%d", t)
+	case float32:
+		return strconv.FormatFloat(float64(t), 'f', -1, 32)
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	default:
+		return fmt.Sprint(t)
+	}
+}
+
+func parseResult(val interface{}, dest interface{}) error {
+	switch d := dest.(type) {
 	case *string:
-		*data.(*string), err = redis.String(reply, err)
+		*d = fmt.Sprint(val)
+	case *[]byte:
+		*d = []byte(fmt.Sprint(val))
 	case *int:
-		*data.(*int), err = redis.Int(reply, err)
+		v, _ := strconv.Atoi(fmt.Sprint(val))
+		*d = v
 	case *int32:
-		iTmp, err = redis.Int(reply, err)
-		*data.(*int32) = int32(iTmp)
+		v, _ := strconv.Atoi(fmt.Sprint(val))
+		*d = int32(v)
 	case *int64:
-		*data.(*int64), err = redis.Int64(reply, err)
+		v, _ := strconv.ParseInt(fmt.Sprint(val), 10, 64)
+		*d = v
 	case *uint:
-		uTmp, err = redis.Uint64(reply, err)
-		*data.(*uint) = uint(uTmp)
+		v, _ := strconv.ParseUint(fmt.Sprint(val), 10, 64)
+		*d = uint(v)
 	case *uint32:
-		uTmp, err = redis.Uint64(reply, err)
-		*data.(*uint32) = uint32(uTmp)
+		v, _ := strconv.ParseUint(fmt.Sprint(val), 10, 64)
+		*d = uint32(v)
 	case *uint64:
-		*data.(*uint64), err = redis.Uint64(reply, err)
+		v, _ := strconv.ParseUint(fmt.Sprint(val), 10, 64)
+		*d = v
 	case *float32:
-		fTmp, err = redis.Float64(reply, err)
-		*data.(*float32) = float32(fTmp)
+		v, _ := strconv.ParseFloat(fmt.Sprint(val), 32)
+		*d = float32(v)
 	case *float64:
-		*data.(*float64), err = redis.Float64(reply, err)
+		v, _ := strconv.ParseFloat(fmt.Sprint(val), 64)
+		*d = v
 	case *bool:
-		*data.(*bool), err = redis.Bool(reply, err)
+		*d = fmt.Sprint(val) == "1" || fmt.Sprint(val) == "true"
 	default:
 		return errors.New("参数错误")
 	}
 	return nil
 }
 
+/* -------------------- 基础 KV -------------------- */
+
 func Set(key string, data interface{}) error {
-	conn := getPool().Get()
-	defer conn.Close()
-	_, err := conn.Do("SET", key, data)
-	if err != nil {
-		return err
-	}
-	return nil
+	return Client().Set(ctx, key, data, 0).Err()
 }
 
 func SetEx(key string, sec int, data interface{}) error {
-	conn := getPool().Get()
-	defer conn.Close()
-	_, err := conn.Do("SETEX", key, sec, data)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func Sadd(key string, data interface{}) error {
-	conn := getPool().Get()
-	defer conn.Close()
-	_, err := conn.Do("SADD", key, data)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func Sismember(key string, data interface{}) (bool, error) {
-	conn := getPool().Get()
-	defer conn.Close()
-	v, err := conn.Do("SISMEMBER", key, data)
-	var ret bool
-	err = parseReply(v, err, &ret)
-	return ret, err
-}
-
-func Exists(key string) (bool, error) {
-	conn := getPool().Get()
-	defer conn.Close()
-	v, err := conn.Do("EXISTS", key)
-	var ret bool
-	err = parseReply(v, err, &ret)
-	return ret, err
+	return Client().Set(ctx, key, data, time.Duration(sec)*time.Second).Err()
 }
 
 func Get(key string, data interface{}) error {
-	conn := getPool().Get()
-	defer conn.Close()
-
-	v, err := conn.Do("GET", key)
-	err = parseReply(v, err, data)
-
+	val, err := Client().Get(ctx, key).Result()
 	if err != nil {
 		return err
 	}
-	return nil
+	return parseResult(val, data)
 }
 
 func Del(key string) error {
-	conn := getPool().Get()
-	defer conn.Close()
-	_, err := conn.Do("DEL", key)
-	return err
+	return Client().Del(ctx, key).Err()
+}
+
+func Exists(key string) (bool, error) {
+	n, err := Client().Exists(ctx, key).Result()
+	return n > 0, err
 }
 
 func Incrby(key string, num *int) error {
-	conn := getPool().Get()
-	defer conn.Close()
-	v, err := conn.Do("INCRBY", key, *num)
-	err = parseReply(v, err, num)
+	v, err := Client().IncrBy(ctx, key, int64(*num)).Result()
 	if err != nil {
 		return err
 	}
+	*num = int(v)
 	return nil
 }
 
-func HSet(key string, field string, data interface{}) error {
-	conn := getPool().Get()
-	defer conn.Close()
-	_, err := conn.Do("HSET", key, field, data)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-	return nil
+/* -------------------- HASH -------------------- */
+
+func HSet(key, field string, data interface{}) error {
+	return Client().HSet(ctx, key, field, data).Err()
 }
-func HGet(key string, field string, data interface{}) error {
-	conn := getPool().Get()
-	defer conn.Close()
-	v, err := conn.Do("HGET", key, field)
-	err = parseReply(v, err, data)
+
+func HGet(key, field string, data interface{}) error {
+	val, err := Client().HGet(ctx, key, field).Result()
 	if err != nil {
 		return err
 	}
-	return nil
+	return parseResult(val, data)
 }
+
 func HGetAll(key string) (map[string]string, error) {
-	conn := getPool().Get()
-	defer conn.Close()
-	return redis.StringMap(conn.Do("HGETALL", key))
+	return Client().HGetAll(ctx, key).Result()
 }
 
-func HDel(key string, field string) error {
-	conn := getPool().Get()
-	defer conn.Close()
-	_, err := conn.Do("HDEL", key, field)
-	return err
+func HDel(key, field string) error {
+	return Client().HDel(ctx, key, field).Err()
 }
+
+/* -------------------- SET -------------------- */
+
+func Sadd(key string, data interface{}) error {
+	return Client().SAdd(ctx, key, normalizeValue(data)).Err()
+}
+
+func Sismember(key string, data interface{}) (bool, error) {
+	return Client().SIsMember(ctx, key, normalizeValue(data)).Result()
+}
+
+/* -------------------- ZSET -------------------- */
 
 func ZAdd(key string, score int64, data interface{}) error {
-	conn := getPool().Get()
-	defer conn.Close()
-	_, err := conn.Do("ZADD", key, score, data)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-	return nil
+	return Client().ZAdd(ctx, key, rds.Z{
+		Score:  float64(score),
+		Member: normalizeValue(data),
+	}).Err()
+}
+
+func ZIncrby(key string, score int64, data interface{}) error {
+	return Client().ZIncrBy(ctx, key, float64(score), normalizeValue(data)).Err()
+}
+
+func ZScore(key string, member interface{}) (int64, error) {
+	v, err := Client().ZScore(ctx, key, normalizeValue(member)).Result()
+	return int64(v), err
+}
+
+func ZRevrank(key string, member interface{}) (int, error) {
+	v, err := Client().ZRevRank(ctx, key, normalizeValue(member)).Result()
+	return int(v), err
+}
+
+func ZRevrange(key string, start, stop int64) ([]string, error) {
+	return Client().ZRevRange(ctx, key, start, stop).Result()
 }
 
 func ZCard(key string) (int, error) {
-	conn := getPool().Get()
-	defer conn.Close()
-	return redis.Int(conn.Do("ZCARD", key))
+	v, err := Client().ZCard(ctx, key).Result()
+	return int(v), err
 }
 
 func ZPopMin(key string, count int) (map[string]string, error) {
-	conn := getPool().Get()
-	defer conn.Close()
-	if count <= 0 {
-		return redis.StringMap(conn.Do("ZPOPMIN", key))
-	} else {
-		return redis.StringMap(conn.Do("ZPOPMIN", key, count))
+	res, err := Client().ZPopMin(ctx, key, int64(count)).Result()
+	if err != nil {
+		return nil, err
 	}
+
+	ret := make(map[string]string)
+	for _, z := range res {
+		ret[z.Member.(string)] = strconv.FormatFloat(z.Score, 'f', -1, 64)
+	}
+	return ret, nil
 }
 
-func ZScore(key string, member interface{}) (int, error) {
-	conn := getPool().Get()
-	defer conn.Close()
-	return redis.Int(conn.Do("ZSCORE", key, member))
-}
+/* -------------------- SCAN -------------------- */
 
 func Scan(cursor int, pattern string, count int) (int, []string) {
-	var (
-		keys = []string{}
-	)
-
-	conn := getPool().Get()
-	defer conn.Close()
-	reply, err := redis.Values(conn.Do("SCAN", cursor, "MATCH", pattern, "COUNT", count))
-	if err != nil {
-		fmt.Println("SCAN command failed: %v", err)
-		return 0, keys
+	var keys []string
+	iter := Client().Scan(ctx, uint64(cursor), pattern, int64(count)).Iterator()
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
 	}
-	// 解析 SCAN 结果
-	_, err = redis.Scan(reply, &cursor, &keys)
-	if err != nil {
-		fmt.Println("Failed to parse SCAN result: %v", err)
-	}
-	return cursor, keys
+	return 0, keys
 }
 
-// 订阅
+/* -------------------- PUBSUB -------------------- */
+
 func Subscribe(key string, proc func(data []byte)) error {
-	conn := getPool().Get()
-	defer conn.Close()
-	psc := redis.PubSubConn{Conn: conn}
-	psc.Subscribe(key)
-	for {
-		switch v := psc.Receive().(type) {
-		case redis.Message:
-			fmt.Printf("%s: message: %s\n", v.Channel, v.Data)
-			proc(v.Data)
-		case redis.Subscription:
-			fmt.Printf("%s: %s %d\n", v.Channel, v.Kind, v.Count)
-		case error:
-			return v
-		}
-	}
-}
-
-// 发布
-func Publish(key string, field string) error {
-	conn := getPool().Get()
-	defer conn.Close()
-	_, err := conn.Do("PUBLISH", key, field)
-	if err != nil {
-		fmt.Println(err)
-		return err
+	sub := Client().Subscribe(ctx, key)
+	ch := sub.Channel()
+	for msg := range ch {
+		proc([]byte(msg.Payload))
 	}
 	return nil
+}
+
+func Publish(key string, field string) error {
+	return Client().Publish(ctx, key, field).Err()
 }
